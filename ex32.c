@@ -151,19 +151,23 @@ int run(char **argv) {
     int input = open(information.inputPath, O_RDONLY);
     if (input < 0) {
         write(FD, FAILURE, SIZE_FAILURE);
+        exit(ERROR);
     }
     int result = open(RESULTS, O_RDWR | O_TRUNC | O_CREAT,
                       S_IRUSR | S_IWUSR);
     if (result < 0) {
         write(FD, FAILURE, SIZE_FAILURE);
+        exit(ERROR);
+
     }
     if (dup2(input, STDIN_FILENO) < 0) {
         write(FD, FAILURE, SIZE_FAILURE);
+        exit(ERROR);
     }
 
     if ((pDir = opendir(information.generalPath)) == NULL) {
         write(FD, FAILURE, SIZE_FAILURE);
-        return ERROR;
+        exit(ERROR);
     }
     while ((pDirent = readdir(pDir)) != NULL) {
         if (strcmp(pDirent->d_name, ".") == 0 ||
@@ -174,10 +178,12 @@ int run(char **argv) {
                       S_IRUSR | S_IWUSR);
         if (output < 0) {
             write(FD, FAILURE, SIZE_FAILURE);
+            exit(ERROR);
         }
         copyPath(tempPath, information.generalPath, pDirent->d_name);
         if (dup2(output, STDOUT_FILENO) < 0) {
             write(FD, FAILURE, SIZE_FAILURE);
+            exit(ERROR);
         }
         //if it's a folder, we start checking for a c file inside
         if (checkIsDirFile(tempPath)) {
@@ -185,43 +191,49 @@ int run(char **argv) {
             checkFlag = searchCFile(tempPath, aOut);
             if (lseek(input, 0, SEEK_SET) < 0) {
                 write(FD, FAILURE, SIZE_FAILURE);
+                exit(ERROR);
             }
+
             //if compiled , compare and write to file
             if (checkFlag == COMP_SUCCESS) {
                 value = compareFiles(information.correctOutput, OUTPUT);
                 writeToResult(result, pDirent->d_name, value, &firstWrite);
                 if (close(output) < 0) {
                     write(FD, FAILURE, SIZE_FAILURE);
-                }
+                    exit(ERROR);
 
+                }
+                if (unlink(aOut) < 0) {
+                    write(FD, FAILURE, SIZE_FAILURE);
+                    exit(ERROR);
+                }
                 // not compiled, write to file and the reason
             } else {
                 writeToResult(result, pDirent->d_name, checkFlag, &firstWrite);
                 if (close(output) < 0) {
                     write(FD, FAILURE, SIZE_FAILURE);
+                    exit(ERROR);
+
                 }
-                /*
-                if (unlink(aOut) < 0) {
-                    write(FD, FAILURE, SIZE_FAILURE);
-                }
-                 */
+
 
             }
         }
     }
     //closing all the remaining opened files and folders
-    if (unlink(aOut) < 0) {
-        write(FD, FAILURE, SIZE_FAILURE);
-    }
     if (close(result) < 0) {
         write(FD, FAILURE, SIZE_FAILURE);
+        exit(ERROR);
+
 
     }
     if (unlink(OUTPUT) < 0) {
         write(FD, FAILURE, SIZE_FAILURE);
+        exit(ERROR);
     }
     if (closedir(pDir) < 0) {
         write(FD, FAILURE, SIZE_FAILURE);
+        exit(ERROR);
     }
     return 0;
 }
@@ -232,29 +244,42 @@ int compareFiles(char *correctOutPath, char *givenOutPath) {
     int status;
     if ((pid = fork()) < 0) {
         write(FD, FAILURE, SIZE_FAILURE);
+        exit(ERROR);
     }
     if (pid == 0) {
         if (execvp(argv[0], argv) == -1) {
             write(FD, FAILURE, SIZE_FAILURE);
+            exit(ERROR);
         }
     } else if (pid > 0) {
         waitpid(pid, &status, 0);
         return WEXITSTATUS(status);
     }
-
 }
 
 void writeToResult(int fd, char *dirName, int result, int *firstWrite) {
     ssize_t n;
     if (*firstWrite >= 1) {
         n = write(fd, NEW_LINE, strlen(NEW_LINE));
+        if (n < 0) {
+            write(FD, FAILURE, SIZE_FAILURE);
+            exit(ERROR);
+
+        }
     }
     n = write(fd, dirName, strlen(dirName));
+    if (n < 0) {
+        write(FD, FAILURE, SIZE_FAILURE);
+        exit(ERROR);
+
+    }
     switch (result) {
         case NO_C_FILE:
             n = write(fd, NO_C_FILE_TEXT, strlen(NO_C_FILE_TEXT));
             if (n < 0) {
                 write(FD, FAILURE, SIZE_FAILURE);
+                exit(ERROR);
+
             }
             (*firstWrite)++;
             break;
@@ -262,6 +287,8 @@ void writeToResult(int fd, char *dirName, int result, int *firstWrite) {
             n = write(fd, COMP_ERROR_TEXT, strlen(COMP_ERROR_TEXT));
             if (n < 0) {
                 write(FD, FAILURE, SIZE_FAILURE);
+                exit(ERROR);
+
             }
             (*firstWrite)++;
             break;
@@ -269,6 +296,8 @@ void writeToResult(int fd, char *dirName, int result, int *firstWrite) {
             n = write(fd, TIMEOUT_TEXT, strlen(TIMEOUT_TEXT));
             if (n < 0) {
                 write(FD, FAILURE, SIZE_FAILURE);
+                exit(ERROR);
+
             }
             (*firstWrite)++;
             break;
@@ -276,6 +305,8 @@ void writeToResult(int fd, char *dirName, int result, int *firstWrite) {
             n = write(fd, BAD_OUTPUT_TEXT, strlen(BAD_OUTPUT_TEXT));
             if (n < 0) {
                 write(FD, FAILURE, SIZE_FAILURE);
+                exit(ERROR);
+
             }
             (*firstWrite)++;
             break;
@@ -283,6 +314,8 @@ void writeToResult(int fd, char *dirName, int result, int *firstWrite) {
             n = write(fd, SIMILAR_TEXT, strlen(SIMILAR_TEXT));
             if (n < 0) {
                 write(FD, FAILURE, SIZE_FAILURE);
+                exit(ERROR);
+
             }
             (*firstWrite)++;
             break;
@@ -290,6 +323,8 @@ void writeToResult(int fd, char *dirName, int result, int *firstWrite) {
             n = write(fd, GREAT_JOB_TEXT, strlen(GREAT_JOB_TEXT));
             if (n < 0) {
                 write(FD, FAILURE, SIZE_FAILURE);
+                exit(ERROR);
+
             }
             (*firstWrite)++;
             break;
@@ -298,6 +333,7 @@ void writeToResult(int fd, char *dirName, int result, int *firstWrite) {
 
     }
 }
+
 
 int compileCFiles(char *path, char *aOut) {
     pid_t pid;
@@ -320,6 +356,8 @@ int compileCFiles(char *path, char *aOut) {
     pid = fork();
     if (pid < 0) {
         write(FD, FAILURE, SIZE_FAILURE);
+        exit(ERROR);
+
     }
     //we are in the son, compile the program
     if (pid == 0) {
@@ -341,6 +379,8 @@ int compileCFiles(char *path, char *aOut) {
 
     if ((pid = fork()) < 0) {
         write(FD, FAILURE, SIZE_FAILURE);
+        exit(ERROR);
+
     }
     // we are in the son, run the file
     if (pid == 0) {
@@ -363,6 +403,10 @@ int compileCFiles(char *path, char *aOut) {
             chdir(save);
             kill(pid, NINE);
             wait(NULL);
+            if (unlink(aOut) < 0) {
+                write(FD, FAILURE, SIZE_FAILURE);
+                exit(ERROR);
+            }
             return TIMEOUT;
         }
 
@@ -386,7 +430,8 @@ int searchCFile(char *path, char *aOut) {
     DIR *folder;
     if ((folder = opendir(path)) == NULL) {
         write(FD, FAILURE, SIZE_FAILURE);
-        return ERROR;
+        exit(ERROR);
+
     }
     // while the c file wasn't found and the folder isn't null
     while ((pDirent = readdir(folder)) != NULL && status == NO_C_FILE) {
@@ -398,6 +443,8 @@ int searchCFile(char *path, char *aOut) {
         if (status == ERROR) {
             if (closedir(folder) < 0) {
                 write(FD, FAILURE, SIZE_FAILURE);
+                exit(ERROR);
+
             }
             return ERROR;
         }
@@ -406,7 +453,7 @@ int searchCFile(char *path, char *aOut) {
 
     if (closedir(folder) < 0) {
         write(FD, FAILURE, SIZE_FAILURE);
-        exit(1);
+        exit(ERROR);
     }
     return status;
 }
@@ -422,7 +469,8 @@ void readLinesToInformation(Information *info, char *path) {
     int fd = open(path, O_RDONLY);
     if (fd < 0) {
         write(FD, FAILURE, SIZE_FAILURE);
-        exit(1);
+        exit(ERROR);
+
     }
     readLine(fd, info->generalPath);
     readLine(fd, info->inputPath);
